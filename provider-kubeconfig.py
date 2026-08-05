@@ -646,13 +646,21 @@ class KubeconfigGenerator(object):
                 Matching rules:
                 - For URL rules, compare only nonResourceURLs.
                 - For normal resource rules, compare apiGroups + resources.
-                - A '*' on either side means "match all" for that field.
+                - A '*' in the revoke rule matches all values.
+                - Existing wildcard grant rules are preserved unless the revoke rule also uses '*'.
                 """
                 def _overlaps(revoke_values, existing_values):
                         if not revoke_values or not existing_values:
                                 return False
-                        if "*" in revoke_values or "*" in existing_values:
+
+                        # A wildcard in the revoke rule matches all existing values.
+                        if "*" in revoke_values:
                                 return True
+
+                        # Preserve wildcard grant rules when revoking a specific permission
+                        if "*" in existing_values:
+                                return False
+
                         return bool(set(revoke_values).intersection(existing_values))
 
                 if revoke_norm_rule["nonResourceURLs"]:
