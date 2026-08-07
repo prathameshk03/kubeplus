@@ -353,7 +353,7 @@ class KubeconfigGenerator(object):
                 # CRUD on secrets, serviceaccounts, configmaps
                 ruleGroup6 = {}
                 apiGroup6 = [""]
-                resourceGroup6 = ["secrets","serviceaccounts","configmaps","events","persistentvolumeclaims","serviceaccounts/token","services","services/proxy","endpoints"]
+                resourceGroup6 = ["secrets","serviceaccounts","configmaps","events","persistentvolumeclaims","services","services/proxy","endpoints"]
                 verbsGroup6 = ["get","watch","list","create","delete","update","patch","deletecollection"]
                 ruleGroup6["apiGroups"] = apiGroup6
                 ruleGroup6["resources"] = resourceGroup6
@@ -376,15 +376,6 @@ class KubeconfigGenerator(object):
                 ruleGroup8["apiGroups"] = apiGroup8
                 ruleGroup8["resources"] = resourceGroup8
                 ruleGroup8["verbs"] = verbsGroup8
-
-                # Impersonate users, groups, serviceaccounts
-                ruleGroup9 = {}
-                apiGroup9 = [""]
-                resourceGroup9 = ["users","groups","serviceaccounts"]
-                verbsGroup9 = ["impersonate"]
-                ruleGroup9["apiGroups"] = apiGroup9
-                ruleGroup9["resources"] = resourceGroup9
-                ruleGroup9["verbs"] = verbsGroup9
 
                 # Exec into the Pods and others in the "" apiGroup
                 ruleGroup10 = {}
@@ -423,15 +414,6 @@ class KubeconfigGenerator(object):
                 ruleGroup13["resources"] = resourceGroup13
                 ruleGroup13["resourceNames"] = resourceNames13
                 ruleGroup13["verbs"] = verbsGroup13
-
-                # Read all
-                ruleGroup14 = {}
-                apiGroup14 = ["*"]
-                resourceGroup14 = ["*"]
-                verbsGroup14 = ["get"]
-                ruleGroup14["apiGroups"] = apiGroup14
-                ruleGroup14["resources"] = resourceGroup14
-                ruleGroup14["verbs"] = verbsGroup14
 
                 ruleGroup15 = {}
                 apiGroup15 = ["certificates.k8s.io"]
@@ -515,12 +497,10 @@ class KubeconfigGenerator(object):
                 ruleList.append(ruleGroup6)
                 ruleList.append(ruleGroup7)
                 ruleList.append(ruleGroup8)
-                ruleList.append(ruleGroup9)
                 ruleList.append(ruleGroup10)
                 ruleList.append(ruleGroup11)
                 ruleList.append(ruleGroup12)
                 ruleList.append(ruleGroup13)
-                ruleList.append(ruleGroup14)
                 ruleList.append(ruleGroup15)
                 ruleList.append(ruleGroup16)
                 ruleList.append(ruleGroup17)
