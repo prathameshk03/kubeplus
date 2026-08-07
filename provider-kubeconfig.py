@@ -378,115 +378,109 @@ class KubeconfigGenerator(object):
                 ruleGroup8["verbs"] = verbsGroup8
 
                 # Exec into the Pods and others in the "" apiGroup
-                ruleGroup10 = {}
-                apiGroup10 = [""]
-                resourceGroup10 = ["pods","pods/attach","pods/exec","pods/portforward","pods/proxy","pods/eviction","replicationcontrollers","replicationcontrollers/scale"]
-                verbsGroup10 = ["get","list","create","update","delete","watch","patch","deletecollection"]
-                ruleGroup10["apiGroups"] = apiGroup10
-                ruleGroup10["resources"] = resourceGroup10
-                ruleGroup10["verbs"] = verbsGroup10
+                ruleGroup9 = {}
+                apiGroup9 = [""]
+                resourceGroup9 = ["pods","pods/attach","pods/exec","pods/portforward","pods/proxy","pods/eviction","replicationcontrollers","replicationcontrollers/scale"]
+                verbsGroup9 = ["get","list","create","update","delete","watch","patch","deletecollection"]
+                ruleGroup9["apiGroups"] = apiGroup9
+                ruleGroup9["resources"] = resourceGroup9
+                ruleGroup9["verbs"] = verbsGroup9
 
-                # AdmissionRegistration
+                # AdmissionRegistration - create
+                ruleGroup10a = {}
+                apiGroup10a = ["admissionregistration.k8s.io"]
+                resourceGroup10a = ["mutatingwebhookconfigurations"]
+                verbsGroup10a = ["create"]
+
+                ruleGroup10a["apiGroups"] = apiGroup10a
+                ruleGroup10a["resources"] = resourceGroup10a
+                ruleGroup10a["verbs"] = verbsGroup10a
+
+                # AdmissionRegistration - get/update/delete, scoped to the one object this SA manages
+                ruleGroup10b = {}
+                apiGroup10b = ["admissionregistration.k8s.io"]
+                resourceGroup10b = ["mutatingwebhookconfigurations"]
+                resourceNames10b = ["platform-as-code.crd-binding"]
+                verbsGroup10b = ["get", "update", "delete"]
+
+                ruleGroup10b["apiGroups"] = apiGroup10b
+                ruleGroup10b["resources"] = resourceGroup10b
+                ruleGroup10b["resourceNames"] = resourceNames10b
+                ruleGroup10b["verbs"] = verbsGroup10b
+
+                # APIExtension
                 ruleGroup11 = {}
-                apiGroup11 = ["admissionregistration.k8s.io"]
-                resourceGroup11 = ["mutatingwebhookconfigurations"]
-                verbsGroup11 = ["get","create","delete","update"]
+                apiGroup11 = ["apiextensions.k8s.io"]
+                resourceGroup11 = ["customresourcedefinitions"]
+                verbsGroup11 = ["get","create","delete","update","patch"]
                 ruleGroup11["apiGroups"] = apiGroup11
                 ruleGroup11["resources"] = resourceGroup11
                 ruleGroup11["verbs"] = verbsGroup11
 
-                # APIExtension
                 ruleGroup12 = {}
-                apiGroup12 = ["apiextensions.k8s.io"]
-                resourceGroup12 = ["customresourcedefinitions"]
-                verbsGroup12 = ["get","create","delete","update","patch"]
+                apiGroup12 = ["extensions"]
+                resourceGroup12 = ["deployments","daemonsets","deployments/rollback","deployments/scale","replicasets","replicasets/scale","replicationcontrollers/scale","ingresses","networkpolicies"]
+                verbsGroup12 = ["get","watch","list","create","delete","update","patch","deletecollection"]
                 ruleGroup12["apiGroups"] = apiGroup12
                 ruleGroup12["resources"] = resourceGroup12
                 ruleGroup12["verbs"] = verbsGroup12
 
-                # Certificates
                 ruleGroup13 = {}
-                apiGroup13 = ["certificates.k8s.io"]
-                resourceGroup13 = ["signers"]
-                resourceNames13 = ["kubernetes.io/legacy-unknown","kubernetes.io/kubelet-serving","kubernetes.io/kube-apiserver-client","cloudark.io/kubeplus"]
-                verbsGroup13 = ["get","create","delete","update","patch","approve"]
+                apiGroup13 = ["networking.k8s.io"]
+                resourceGroup13 = ["ingresses","networkpolicies"]
+                verbsGroup13 = ["get","watch","list","create","delete","update","patch","deletecollection"]
                 ruleGroup13["apiGroups"] = apiGroup13
                 ruleGroup13["resources"] = resourceGroup13
-                ruleGroup13["resourceNames"] = resourceNames13
                 ruleGroup13["verbs"] = verbsGroup13
 
+                ruleGroup14 = {}
+                apiGroup14 = ["authorization.k8s.io"]
+                resourceGroup14 = ["localsubjectaccessreviews"]
+                verbsGroup14 = ["create"]
+                ruleGroup14["apiGroups"] = apiGroup14
+                ruleGroup14["resources"] = resourceGroup14
+                ruleGroup14["verbs"] = verbsGroup14
+
                 ruleGroup15 = {}
-                apiGroup15 = ["certificates.k8s.io"]
-                resourceGroup15 = ["certificatesigningrequests","certificatesigningrequests/approval"]
-                verbsGroup15 = ["create","delete","update","patch"]
+                apiGroup15 = ["autoscaling"]
+                resourceGroup15 = ["horizontalpodautoscalers"]
+                verbsGroup15 = ["create","delete","deletecollection","patch","update"]
                 ruleGroup15["apiGroups"] = apiGroup15
                 ruleGroup15["resources"] = resourceGroup15
                 ruleGroup15["verbs"] = verbsGroup15
 
                 ruleGroup16 = {}
-                apiGroup16 = ["extensions"]
-                resourceGroup16 = ["deployments","daemonsets","deployments/rollback","deployments/scale","replicasets","replicasets/scale","replicationcontrollers/scale","ingresses","networkpolicies"]
-                verbsGroup16 = ["get","watch","list","create","delete","update","patch","deletecollection"]
+                apiGroup16 = ["batch"]
+                resourceGroup16 = ["cronjobs","jobs"]
+                verbsGroup16 = ["create","delete","deletecollection","patch","update"]
                 ruleGroup16["apiGroups"] = apiGroup16
                 ruleGroup16["resources"] = resourceGroup16
                 ruleGroup16["verbs"] = verbsGroup16
 
                 ruleGroup17 = {}
-                apiGroup17 = ["networking.k8s.io"]
-                resourceGroup17 = ["ingresses","networkpolicies"]
-                verbsGroup17 = ["get","watch","list","create","delete","update","patch","deletecollection"]
+                apiGroup17 = ["policy"]
+                resourceGroup17 = ["poddisruptionbudgets"]
+                verbsGroup17 = ["create","delete","deletecollection","patch","update"]
                 ruleGroup17["apiGroups"] = apiGroup17
                 ruleGroup17["resources"] = resourceGroup17
                 ruleGroup17["verbs"] = verbsGroup17
 
                 ruleGroup18 = {}
-                apiGroup18 = ["authorization.k8s.io"]
-                resourceGroup18 = ["localsubjectaccessreviews"]
-                verbsGroup18 = ["create"]
+                apiGroup18 = [""]
+                resourceGroup18 = ["resourcequotas"]
+                verbsGroup18 = ["create","delete","deletecollection","patch","update"]
                 ruleGroup18["apiGroups"] = apiGroup18
                 ruleGroup18["resources"] = resourceGroup18
                 ruleGroup18["verbs"] = verbsGroup18
 
+                # PersistentVolumes and PersistentVolumeClaims for charts storage in helmer container
                 ruleGroup19 = {}
-                apiGroup19 = ["autoscaling"]
-                resourceGroup19 = ["horizontalpodautoscalers"]
-                verbsGroup19 = ["create","delete","deletecollection","patch","update"]
+                apiGroup19 = [""]
+                resourceGroup19 = ["persistentvolumes","persistentvolumeclaims"]
+                verbsGroup19 = ["get","watch","list","create","delete","update","patch"]
                 ruleGroup19["apiGroups"] = apiGroup19
                 ruleGroup19["resources"] = resourceGroup19
                 ruleGroup19["verbs"] = verbsGroup19
-
-                ruleGroup20 = {}
-                apiGroup20 = ["batch"]
-                resourceGroup20 = ["cronjobs","jobs"]
-                verbsGroup20 = ["create","delete","deletecollection","patch","update"]
-                ruleGroup20["apiGroups"] = apiGroup20
-                ruleGroup20["resources"] = resourceGroup20
-                ruleGroup20["verbs"] = verbsGroup20
-
-                ruleGroup21 = {}
-                apiGroup21 = ["policy"]
-                resourceGroup21 = ["poddisruptionbudgets"]
-                verbsGroup21 = ["create","delete","deletecollection","patch","update"]
-                ruleGroup21["apiGroups"] = apiGroup21
-                ruleGroup21["resources"] = resourceGroup21
-                ruleGroup21["verbs"] = verbsGroup21
-
-                ruleGroup22 = {}
-                apiGroup22 = [""]
-                resourceGroup22 = ["resourcequotas"]
-                verbsGroup22 = ["create","delete","deletecollection","patch","update"]
-                ruleGroup22["apiGroups"] = apiGroup22
-                ruleGroup22["resources"] = resourceGroup22
-                ruleGroup22["verbs"] = verbsGroup22
-
-                # PersistentVolumes and PersistentVolumeClaims for charts storage in helmer container
-                ruleGroup23 = {}
-                apiGroup23 = [""]
-                resourceGroup23 = ["persistentvolumes","persistentvolumeclaims"]
-                verbsGroup23 = ["get","watch","list","create","delete","update","patch"]
-                ruleGroup23["apiGroups"] = apiGroup23
-                ruleGroup23["resources"] = resourceGroup23
-                ruleGroup23["verbs"] = verbsGroup23
 
                 ruleList = []
                 ruleList.append(ruleGroup1)
@@ -497,19 +491,18 @@ class KubeconfigGenerator(object):
                 ruleList.append(ruleGroup6)
                 ruleList.append(ruleGroup7)
                 ruleList.append(ruleGroup8)
-                ruleList.append(ruleGroup10)
+                ruleList.append(ruleGroup9)
+                ruleList.append(ruleGroup10a)
+                ruleList.append(ruleGroup10b)
                 ruleList.append(ruleGroup11)
                 ruleList.append(ruleGroup12)
                 ruleList.append(ruleGroup13)
+                ruleList.append(ruleGroup14)
                 ruleList.append(ruleGroup15)
                 ruleList.append(ruleGroup16)
                 ruleList.append(ruleGroup17)
                 ruleList.append(ruleGroup18)
                 ruleList.append(ruleGroup19)
-                ruleList.append(ruleGroup20)
-                ruleList.append(ruleGroup21)
-                ruleList.append(ruleGroup22)
-                ruleList.append(ruleGroup23)
                 return ruleList
 
         def _apply_consumer_rbac(self, sa, namespace, kubeconfig):
