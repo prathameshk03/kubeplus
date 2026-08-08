@@ -370,6 +370,61 @@ class TestKubeconfigIntegration(unittest.TestCase):
         finally:
             self._delete_for_cleanup(ns)
 
+    def test_provider_clusterrole_excludes_removed_escalation_permissions(self):
+        """
+        Provider ClusterRole must not contain the removed cluster-admin-equivalent
+        escalation permissions: certificate signing, impersonation, or
+        ServiceAccount token creation.
+        """
+        ns = "kubeplus-test-provider-rbac-" + uuid.uuid4().hex[:8]
+
+        try:
+            cfg, proc = self._create_and_get_kubeconfig(ns)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+            role_out, role_err = _run_command(
+                "kubectl get clusterrole kubeplus-saas-provider -o json"
+                + self.kubeconfig_flag
+            )
+
+            if role_err and (
+                "unable to connect to the server" in role_err.lower()
+                or "i/o timeout" in role_err.lower()
+            ):
+                self.skipTest(
+                    "Skipping ClusterRole assertion due to transient API "
+                    "connectivity issue: " + role_err.strip()
+                )
+
+            self.assertTrue(
+                role_out,
+                "Expected kubeplus-saas-provider ClusterRole to exist; "
+                "kubectl error: " + role_err,
+            )
+
+            role = json.loads(role_out)
+            rules = role.get("rules", [])
+
+            all_resources = [
+                resource
+                for rule in rules
+                for resource in rule.get("resources", [])
+            ]
+            all_verbs = [
+                verb
+                for rule in rules
+                for verb in rule.get("verbs", [])
+            ]
+
+            self.assertNotIn("certificatesigningrequests",all_resources,)
+            self.assertNotIn("certificatesigningrequests/approval",all_resources,)
+            self.assertNotIn("signers",all_resources,)
+            self.assertNotIn("serviceaccounts/token",all_resources,)
+            self.assertNotIn("impersonate",all_verbs,)
+
+        finally:
+            self._delete_for_cleanup(ns)            
+
     def test_consumer_kubeconfig_all_fields_nonempty(self):
         """Consumer kubeconfig: every field non-empty, user name matches SA, namespace in context."""
         ns = "kubeplus-test-cons-" + uuid.uuid4().hex[:8]
