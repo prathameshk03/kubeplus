@@ -60,8 +60,9 @@ class TestKubePlus(unittest.TestCase):
         return False
 
     @classmethod
-    def _process_template(cls, file):
-        name = "kp-" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    def _process_template(cls, file, name=None):
+        if name is None:
+            name = "kp-" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
         with open(file) as file_in, NamedTemporaryFile(mode='w+', suffix='.yaml', delete=False) as out:
             template = Template(file_in.read())
             out.write(template.render(name=name))
@@ -262,7 +263,7 @@ class TestKubePlus(unittest.TestCase):
             sys.exit(0)
 
         hs1_name, hs1_file = TestKubePlus._process_template("template-manifests/hello-world-hs1.yaml")
-        _, hs_replicas_file = TestKubePlus._process_template("template-manifests/hello-world-hs1-replicas-2.yaml")
+        _, hs_replicas_file = TestKubePlus._process_template("template-manifests/hello-world-hs1-replicas-2.yaml", name=hs1_name)
 
         kubeplus_home = os.getenv("KUBEPLUS_HOME")
         # print("KubePlus home:" + kubeplus_home)
