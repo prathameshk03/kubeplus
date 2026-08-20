@@ -502,9 +502,9 @@ class TestKubePlus(unittest.TestCase):
         all_running = False
         pods = []
         timer = 0
-        count = 0
+
         while not all_running and timer < 120:
-            timer = timer + 1
+            count = 0
             out, err = TestKubePlus.run_command(cmd)
             for line in out.split("\n"):
                 if 'Running' in line or 'Pending' in line or 'ContainerCreating' in line:
@@ -517,6 +517,9 @@ class TestKubePlus(unittest.TestCase):
             if count == num_of_pods:
                 all_running = True
                 break
+
+            timer = timer + 1
+            time.sleep(3)
 
         return pods, count, all_running
 
