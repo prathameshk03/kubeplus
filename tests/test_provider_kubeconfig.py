@@ -171,6 +171,48 @@ perms:
         )
         self.assertFalse(self.generator._revoke_targets_rule(existing, no_match))
 
+    def test_revoke_wildcard_matches_existing_specific_rule(self):
+        """A wildcard revoke target should match an existing specific rule."""
+        existing = self.generator._normalize_rule(
+            {
+                "apiGroups": ["apps"],
+                "resources": ["deployments"],
+                "verbs": ["get"],
+            }
+        )
+        revoke = self.generator._normalize_rule(
+            {
+                "apiGroups": ["apps"],
+                "resources": ["*"],
+                "verbs": ["get"],
+            }
+        )
+
+        self.assertTrue(
+            self.generator._revoke_targets_rule(existing, revoke)
+        )
+
+    def test_revoke_specific_rule_does_not_match_existing_wildcard_rule(self):
+        """A specific revoke target should not match an existing wildcard rule."""
+        existing = self.generator._normalize_rule(
+            {
+                "apiGroups": ["apps"],
+                "resources": ["*"],
+                "verbs": ["get"],
+            }
+        )
+        revoke = self.generator._normalize_rule(
+            {
+                "apiGroups": ["apps"],
+                "resources": ["deployments"],
+                "verbs": ["get"],
+            }
+        )
+
+        self.assertFalse(
+            self.generator._revoke_targets_rule(existing, revoke)
+        )
+
     def test_remove_revoked_verbs_partial(self):
         self.assertEqual(
             self.generator._remove_revoked_verbs(["get", "delete"], ["delete"]),
@@ -613,7 +655,7 @@ class TestKubeconfigIntegration(unittest.TestCase):
             )
             self.assertEqual(proc_revoke.returncode, 0, proc_revoke.stderr)
             after = self._auth_can_i(ns, sa, "create", "secrets")
-            self.assertEqual(after, "no")
+            self.assertTrue(after.startswith("no"), after)
         finally:
             _run_command("kubectl delete clusterrole " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
             _run_command("kubectl delete clusterrolebinding " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
@@ -794,8 +836,10 @@ class TestKubeconfigIntegration(unittest.TestCase):
                 timeout=120,
             )
             self.assertEqual(proc_revoke.returncode, 0, proc_revoke.stderr)
-            self.assertEqual(self._auth_can_i(ns, sa, "get", "pods"), "no")
-            self.assertEqual(self._auth_can_i(ns, sa, "delete", "pods"), "no")
+            get_result = self._auth_can_i(ns, sa, "get", "pods")
+            delete_result = self._auth_can_i(ns, sa, "delete", "pods")
+            self.assertTrue(get_result.startswith("no"), get_result)
+            self.assertTrue(delete_result.startswith("no"), delete_result)
         finally:
             _run_command("kubectl delete clusterrole " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
             _run_command("kubectl delete clusterrolebinding " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
