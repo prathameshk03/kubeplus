@@ -115,6 +115,14 @@ class KubeconfigGenerator(object):
                         return None
                 raise RuntimeError(f"Failed to fetch clusterrole {name!r}: {err.strip()}")
 
+        def _fetch_api_resources(self, api_group, kubeconfig):
+                """Return resource names available for the given API group."""
+                out, err, rc = run_command_with_code("kubectl api-resources " + "--api-group=" + api_group + " -o json" + kubeconfig)
+                if rc != 0:
+                        raise RuntimeError(f"Failed to fetch API resources for group {api_group!r}: {err.strip()}")
+                data = json.loads(out)
+                return sorted(resource["name"] for resource in data.get("resources", []))
+
         def _rules_changed(self, existing_rules, remaining_rules):
                 return self._normalize_rule_list(existing_rules) != self._normalize_rule_list(remaining_rules)
 
@@ -624,10 +632,17 @@ class KubeconfigGenerator(object):
                 """
                 existing_list = list(existing_verbs)
                 revoke_set = set(revoke_verbs)
-                if "*" in existing_list and revoke_set:
-                        return None
                 if "*" in revoke_set:
                         return None
+                if "*" in existing_list:
+                        existing_list = ["get",
+                                         "list",
+                                         "watch",
+                                         "create",
+                                         "update",
+                                         "patch",
+                                         "delete",
+                                         "deletecollection"]
                 remaining = [v for v in existing_list if v not in revoke_set]
                 return remaining or None
 
@@ -647,19 +662,14 @@ class KubeconfigGenerator(object):
                 - For URL rules, compare only nonResourceURLs.
                 - For normal resource rules, compare apiGroups + resources.
                 - A '*' in the revoke rule matches all values.
-                - Existing wildcard grant rules are preserved unless the revoke rule also uses '*'.
                 """
                 def _overlaps(revoke_values, existing_values):
                         if not revoke_values or not existing_values:
                                 return False
 
-                        # A wildcard in the revoke rule matches all existing values.
-                        if "*" in revoke_values:
+                        # A wildcard in either rule overlaps with the other rule.
+                        if "*" in revoke_values or "*" in existing_values:
                                 return True
-
-                        # Preserve wildcard grant rules when revoking a specific permission
-                        if "*" in existing_values:
-                                return False
 
                         return bool(set(revoke_values).intersection(existing_values))
 
@@ -671,7 +681,7 @@ class KubeconfigGenerator(object):
                         return False
                 return True
 
-        def _build_remaining_rules_for_role(self, role_obj, revoke_norm):
+        def _build_remaining_rules_for_role(self, role_obj, revoke_norm, kubeconfig):
                 """Return (existing_rules, remaining_rules) for one role after revoke."""
                 existing_rules = role_obj.get("rules") or []
                 remaining_rules = []
@@ -724,10 +734,50 @@ class KubeconfigGenerator(object):
 
                         existing_resources = rule.get("resources") or []
                         existing_api_groups = rule.get("apiGroups") or []
-                        is_atomic_scope = (not existing_resources) or ("*" in existing_api_groups) or ("*" in existing_resources)
+
+                        # Case 3: wildcard resources with a specific API group.
+                        # Expand "*" into concrete resources so a revoke can remove
+                        # permissions from only the requested resource.
+                        if (
+                                "*" in existing_resources
+                                and len(existing_api_groups) == 1
+                                and existing_api_groups[0] != "*"
+                        ):
+                                expanded_resources = self._fetch_api_resources(existing_api_groups[0], kubeconfig)
+                                remaining_by_verbs = {}
+                                for resource in expanded_resources:
+                                        revoke_verbs = []
+                                        for matched_rule in matched_revoke_rules:
+                                                matched_resources = set(matched_rule["resources"])
+                                                resource_matches = ("*" in matched_resources 
+                                                                    or resource in matched_resources)
+                                                if not resource_matches:
+                                                        continue
+                                                revoke_verbs.extend(matched_rule["verbs"])
+                                        new_verbs = self._remove_revoked_verbs(existing_verbs, revoke_verbs)
+                                        if new_verbs:
+                                                remaining_by_verbs.setdefault(
+                                                        tuple(new_verbs),
+                                                        []
+                                                ).append(resource)
+
+                                for verbs_key, resources in sorted(remaining_by_verbs.items()):
+                                        updated_rule = dict(rule)
+                                        updated_rule["resources"] = sorted(resources)
+                                        updated_rule["verbs"] = list(verbs_key)
+                                        remaining_rules.append(updated_rule)
+
+                                continue
+
+                        # Case 4: wildcard API group or no-resource rule.
+                        # These scopes cannot be expanded safely into API groups here,
+                        # so revoke trims matching verbs from the existing rule.
+                        is_atomic_scope = (
+                                (not existing_resources)
+                                or ("*" in existing_api_groups)
+                        )
+
                         if is_atomic_scope:
-                                # Case 3: wildcard/no-resource rule.
-                                # We cannot remove just one sub-part, so trim verbs on whole rule.
                                 combined_revoke_verbs = [v for mr in matched_revoke_rules for v in mr["verbs"]]
                                 stripped_verbs = self._remove_revoked_verbs(existing_verbs, combined_revoke_verbs)
                                 if stripped_verbs:
@@ -736,7 +786,7 @@ class KubeconfigGenerator(object):
                                         remaining_rules.append(updated_rule)
                                 continue
 
-                        # Case 4: explicit resource list.
+                        # Case 5: explicit resource list.
                         # Revoke per resource so one resource change does not affect others.
                         remaining_by_verbs = {}
                         for resource in existing_resources:
@@ -800,10 +850,10 @@ class KubeconfigGenerator(object):
 
                 candidates = []
                 if update_role is not None:
-                        existing_rules, remaining_rules = self._build_remaining_rules_for_role(update_role, revoke_norm)
+                        existing_rules, remaining_rules = self._build_remaining_rules_for_role(update_role, revoke_norm, kubeconfig)
                         candidates.append((sa + "-update", update_role, existing_rules, remaining_rules))
                 if base_role is not None:
-                        existing_rules, remaining_rules = self._build_remaining_rules_for_role(base_role, revoke_norm)
+                        existing_rules, remaining_rules = self._build_remaining_rules_for_role(base_role, revoke_norm, kubeconfig)
                         candidates.append((sa, base_role, existing_rules, remaining_rules))
 
                 target = next(

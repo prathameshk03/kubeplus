@@ -171,56 +171,74 @@ perms:
         )
         self.assertFalse(self.generator._revoke_targets_rule(existing, no_match))
 
-    def test_revoke_wildcard_matches_existing_specific_rule(self):
-        """A wildcard revoke target should match an existing specific rule."""
-        existing = self.generator._normalize_rule(
-            {
-                "apiGroups": ["apps"],
-                "resources": ["deployments"],
-                "verbs": ["get"],
-            }
-        )
-        revoke = self.generator._normalize_rule(
-            {
-                "apiGroups": ["apps"],
-                "resources": ["*"],
-                "verbs": ["get"],
-            }
-        )
-
-        self.assertTrue(
-            self.generator._revoke_targets_rule(existing, revoke)
-        )
-
-    def test_revoke_specific_rule_does_not_match_existing_wildcard_rule(self):
-        """A specific revoke target should not match an existing wildcard rule."""
-        existing = self.generator._normalize_rule(
-            {
-                "apiGroups": ["apps"],
-                "resources": ["*"],
-                "verbs": ["get"],
-            }
-        )
-        revoke = self.generator._normalize_rule(
-            {
-                "apiGroups": ["apps"],
-                "resources": ["deployments"],
-                "verbs": ["get"],
-            }
-        )
-
-        self.assertFalse(
-            self.generator._revoke_targets_rule(existing, revoke)
-        )
+    def test_fetch_api_resources_returns_resource_names(self):
+        resources = self.generator._fetch_api_resources("apps", "")
+        self.assertIn("deployments", resources)
+        self.assertIn("replicasets", resources)
 
     def test_remove_revoked_verbs_partial(self):
         self.assertEqual(
-            self.generator._remove_revoked_verbs(["get", "delete"], ["delete"]),
-            ["get"],
+            self.generator._remove_revoked_verbs(["get", "delete"], ["delete"]), ["get"],)
+
+    def test_remove_revoked_verbs_from_existing_wildcard(self):
+        """Revoking one verb from wildcard verbs keeps all other verbs."""
+        result = self.generator._remove_revoked_verbs(["*"], ["get"])
+
+        self.assertEqual(result, ["list",
+                                  "watch",
+                                  "create",
+                                  "update",
+                                  "patch",
+                                  "delete",
+                                  "deletecollection",])
+
+    def test_revoke_expands_wildcard_resources(self):
+        """Revoke expands wildcard resources and removes permission only
+        from the targeted resource.
+        """
+        role_obj = {
+                "rules": [
+                        {
+                                "apiGroups": ["apps"],
+                                "resources": ["*"],
+                                "verbs": ["*"],
+                        }
+                ]
+        }
+
+        revoke_norm = [
+                self.generator._normalize_rule(
+                        {
+                                "apiGroups": ["apps"],
+                                "resources": ["deployments"],
+                                "verbs": ["get"],
+                        }
+                )
+        ]
+
+        _, remaining_rules = (
+                self.generator._build_remaining_rules_for_role(
+                        role_obj,
+                        revoke_norm,
+                        ""
+                )
         )
 
-    def test_remove_revoked_verbs_wildcard_existing_drops_rule(self):
-        self.assertIsNone(self.generator._remove_revoked_verbs(["*"], ["get"]))
+        deployment_rule = None
+        other_resources = []
+
+        for rule in remaining_rules:
+                resources = rule.get("resources", [])
+                if "deployments" in resources:
+                        deployment_rule = rule
+                else:
+                        other_resources.extend(resources)
+
+        self.assertIsNotNone(deployment_rule)
+        self.assertNotIn("get", deployment_rule["verbs"])
+        self.assertNotIn("*", deployment_rule["verbs"])
+        self.assertIn("replicasets", other_resources)
+
 
     def test_parse_permission_rules_resource_name_substring_without_separator(self):
         """A resource key containing 'resourceName' but no '/resourceName::' separator
@@ -797,8 +815,8 @@ class TestKubeconfigIntegration(unittest.TestCase):
             if os.path.exists(permission_file):
                 os.remove(permission_file)
 
-    def test_revoke_on_wildcard_existing_verbs_drops_matching_scope_rule(self):
-        """If existing verbs include '*', revoking any verb on same scope drops that rule."""
+    def test_revoke_specific_verb_from_wildcard_verbs(self):
+        """Revoking one verb from wildcard verbs preserves all other verbs."""
         ns = "kubeplus-test-revoke-star-" + uuid.uuid4().hex[:8]
         sa = "revoke-star-sa"
         revoke_payload = {"perms": {"": [{"pods": ["get"]}]}}
@@ -839,12 +857,223 @@ class TestKubeconfigIntegration(unittest.TestCase):
             get_result = self._auth_can_i(ns, sa, "get", "pods")
             delete_result = self._auth_can_i(ns, sa, "delete", "pods")
             self.assertTrue(get_result.startswith("no"), get_result)
-            self.assertTrue(delete_result.startswith("no"), delete_result)
+            self.assertEqual(delete_result, "yes")
         finally:
             _run_command("kubectl delete clusterrole " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
             _run_command("kubectl delete clusterrolebinding " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
             _run_command("kubectl delete clusterrole " + sa + self.kubeconfig_flag + " 2>/dev/null")
             _run_command("kubectl delete clusterrolebinding " + sa + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete configmap " + sa + "-perms -n " + ns + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete sa " + sa + " -n " + ns + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete namespace " + ns + " --ignore-not-found --wait=false" + self.kubeconfig_flag)
+            _cleanup_script_artifacts(sa)
+            if os.path.exists(permission_file):
+                os.remove(permission_file)
+
+    def test_revoke_specific_permission_from_wildcard_grant(self):
+        """Revoking get deployments from apps/*/* preserves other permissions."""
+        ns = "test-revoke-wildcard-" + uuid.uuid4().hex[:8]
+        sa = "test-revoke-wildcard"
+        revoke_payload = {"perms": {"apps": [{"deployments": ["get"]}]}}
+        fd, permission_file = tempfile.mkstemp(suffix=".json", text=True)
+        os.close(fd)
+        with open(permission_file, "w", encoding="utf-8") as fp:
+            json.dump(revoke_payload, fp)
+        role_yaml = """
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: test-revoke-wildcard
+        rules:
+        - apiGroups:
+          - apps
+          resources:
+          - "*"
+          verbs:
+          - "*"
+        """
+        try:
+            _run_command("kubectl create ns " + ns + self.kubeconfig_flag)
+            _run_command("kubectl create sa " + sa + " -n " + ns + self.kubeconfig_flag)
+            proc = subprocess.run(
+                ["kubectl", "apply", "-f", "-"] + self.kubeconfig_arg,
+                input=role_yaml,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            _run_command(
+                "kubectl create clusterrolebinding " + sa
+                + " --clusterrole=" + sa
+                + " --serviceaccount=" + ns + ":" + sa
+                + self.kubeconfig_flag
+            )
+            # Before revoke: wildcard grant allows both permissions.
+            self.assertEqual(self._auth_can_i(ns, sa, "get", "deployments.apps"), "yes")
+            self.assertEqual(self._auth_can_i(ns, sa, "get", "replicasets.apps"), "yes")
+            proc_revoke = subprocess.run(
+                [
+                    sys.executable,
+                    os.path.join(ROOT, SCRIPT),
+                    "revoke",
+                    ns,
+                    "-c",
+                    sa,
+                    "-p",
+                    permission_file,
+                ] + self.kubeconfig_arg,
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(proc_revoke.returncode, 0, proc_revoke.stderr)
+            # The requested permission must be revoked.
+            deployment_get = self._auth_can_i(ns, sa, "get", "deployments.apps")
+            self.assertTrue(deployment_get.startswith("no"), deployment_get)
+            # Other deployment permissions must remain.
+            self.assertEqual(self._auth_can_i(ns, sa, "list", "deployments.apps",), "yes")
+            # Other resources from the original wildcard grant must remain.
+            self.assertEqual(self._auth_can_i(ns, sa, "get", "replicasets.apps",), "yes")
+        finally:
+            _run_command("kubectl delete clusterrole " + sa + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete clusterrolebinding " + sa + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete clusterrole " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete clusterrolebinding " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete configmap " + sa + "-perms" + " -n " + ns + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete sa " + sa + " -n " + ns + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete namespace " + ns + " --ignore-not-found --wait=false" + self.kubeconfig_flag)
+            _cleanup_script_artifacts(sa)
+            if os.path.exists(permission_file):
+                os.remove(permission_file)
+
+    def test_revoke_specific_permission_from_full_wildcard_grant(self):
+        """Revoking get pods from */*/* preserves other permissions."""
+        ns = "kubeplus-test-revoke-full-wild-" + uuid.uuid4().hex[:8]
+        sa = "revoke-full-wildcard"
+        revoke_payload = {"perms": {"": [{"pods": ["get"]}]}}
+        fd, permission_file = tempfile.mkstemp(suffix=".json", text=True)
+        os.close(fd)
+        with open(permission_file, "w", encoding="utf-8") as fp:
+            json.dump(revoke_payload, fp)
+        try:
+            _run_command("kubectl create ns " + ns + self.kubeconfig_flag)
+            _run_command("kubectl create sa " + sa + " -n " + ns + self.kubeconfig_flag)
+            _run_command(
+                "kubectl create clusterrole " + sa
+                + " --verb='*' --resource='*'"
+                + self.kubeconfig_flag
+            )
+            _run_command(
+                "kubectl create clusterrolebinding " + sa
+                + " --clusterrole=" + sa
+                + " --serviceaccount=" + ns + ":" + sa
+                + self.kubeconfig_flag
+            )
+            # Before revoke, wildcard permission allows everything.
+            self.assertEqual(self._auth_can_i(ns, sa, "get", "pods"), "yes")
+            self.assertEqual(self._auth_can_i(ns, sa, "create", "pods"), "yes")
+            self.assertEqual(self._auth_can_i(ns, sa, "get", "services"), "yes")
+            proc_revoke = subprocess.run(
+                [
+                    sys.executable,
+                    os.path.join(ROOT, SCRIPT),
+                    "revoke",
+                    ns,
+                    "-c",
+                    sa,
+                    "-p",
+                    permission_file,
+                ] + self.kubeconfig_arg,
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(proc_revoke.returncode, 0, proc_revoke.stderr)
+            # Requested permission is revoked.
+            get_pods = self._auth_can_i(ns, sa, "get", "pods")
+            self.assertTrue(get_pods.startswith("no"), get_pods)
+            # Other permissions must remain.
+            self.assertEqual(self._auth_can_i(ns, sa, "create", "pods"), "yes")
+            self.assertEqual(self._auth_can_i(ns, sa, "get", "services"), "yes")
+        finally:
+            _run_command("kubectl delete clusterrole " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete clusterrolebinding " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete clusterrole " + sa + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete clusterrolebinding " + sa + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete configmap " + sa + "-perms -n " + ns + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete sa " + sa + " -n " + ns + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete namespace " + ns + " --ignore-not-found --wait=false" + self.kubeconfig_flag)
+            _cleanup_script_artifacts(sa)
+            if os.path.exists(permission_file):
+                os.remove(permission_file)
+
+    def test_revoke_all_verbs_from_specific_permission(self):
+        """Revoking * verbs from a specific permission removes that permission."""
+        ns = "kubeplus-test-revoke-all-verbs-" + uuid.uuid4().hex[:8]
+        sa = "revoke-all-verbs-sa"
+        revoke_payload = {"perms": {"apps": [{"deployments": ["*"]}]}}
+        fd, permission_file = tempfile.mkstemp(suffix=".json", text=True)
+        os.close(fd)
+        with open(permission_file, "w", encoding="utf-8") as fp:
+            json.dump(revoke_payload, fp)
+        role_yaml = """
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: revoke-all-verbs-sa
+        rules:
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - get
+        """
+        try:
+            _run_command("kubectl create ns " + ns + self.kubeconfig_flag)
+            _run_command("kubectl create sa " + sa + " -n " + ns + self.kubeconfig_flag)
+            proc = subprocess.run(
+                ["kubectl", "apply", "-f", "-"] + self.kubeconfig_arg,
+                input=role_yaml,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            _run_command(
+                "kubectl create clusterrolebinding " + sa
+                + " --clusterrole=" + sa
+                + " --serviceaccount=" + ns + ":" + sa
+                + self.kubeconfig_flag
+            )
+            # Before revoke: get deployments is allowed.
+            self.assertEqual(self._auth_can_i(ns, sa, "get", "deployments.apps"), "yes")
+            proc_revoke = subprocess.run(
+                [
+                    sys.executable,
+                    os.path.join(ROOT, SCRIPT),
+                    "revoke",
+                    ns,
+                    "-c",
+                    sa,
+                    "-p",
+                    permission_file,
+                ] + self.kubeconfig_arg,
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(proc_revoke.returncode, 0, proc_revoke.stderr)
+            # Revoking all verbs removes the permission.
+            get_deployments = self._auth_can_i(ns, sa, "get", "deployments.apps")
+            self.assertTrue(get_deployments.startswith("no"), get_deployments)
+        finally:
+            _run_command("kubectl delete clusterrole " + sa + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete clusterrolebinding " + sa + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete clusterrole " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
+            _run_command("kubectl delete clusterrolebinding " + sa + "-update" + self.kubeconfig_flag + " 2>/dev/null")
             _run_command("kubectl delete configmap " + sa + "-perms -n " + ns + self.kubeconfig_flag + " 2>/dev/null")
             _run_command("kubectl delete sa " + sa + " -n " + ns + self.kubeconfig_flag + " 2>/dev/null")
             _run_command("kubectl delete namespace " + ns + " --ignore-not-found --wait=false" + self.kubeconfig_flag)
