@@ -362,7 +362,7 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
-        command: [ "python3", "/root/kubeconfiggenerator.py"]
+        command: [ "python3", "/root/crd_registration_helper.py"]
         args:
           - "$(KUBEPLUS_NAMESPACE)"
         volumeMounts:

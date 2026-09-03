@@ -74,7 +74,7 @@ def run_command(cmd):
     #    return err.decode('utf-8')
 
 
-class KubeconfigGenerator(object):
+class CRDRegistrationHelper(object):
 
         def run_command(self, cmd):
                 #print("Inside run_command")
@@ -1352,7 +1352,7 @@ def apply_rbac():
     resourceComposition = request.args.get('resourceComposition')
     targetNS = request.args.get('targetNS')
 
-    cmd = ["/root/kubectl", "get", "resourcecomposition", resourceComposition, "-n", namespace, "-o", "json"]
+    cmd = ["kubectl", "get", "resourcecomposition", resourceComposition, "-n", namespace, "-o", "json"]
     out, _ = run_command(cmd)
     json_obj = json.loads(out)
     helm_chart = json_obj['spec']['newResource']['chartURL']
@@ -1470,7 +1470,7 @@ def apply_rbac():
     return "abc"
 
 if __name__ == '__main__':
-        kubeconfigGenerator = KubeconfigGenerator()
+        crdRegistrationHelper = CRDRegistrationHelper()
         namespace = sys.argv[1]
 
         # Note that the reason we are not applying RBAC to consumer and provider
@@ -1479,7 +1479,7 @@ if __name__ == '__main__':
 
         # 2. Generate/Retrieve Consumer kubeconfig
         sa = 'kubeplus-saas-consumer'
-        kubeconfigGenerator._generate_kubeconfig(sa, namespace)
+        crdRegistrationHelper._generate_kubeconfig(sa, namespace)
         #kubeconfigGenerator._apply_rbac(sa, namespace, entity='consumer')
         
         # We are commenting out retrieval of Provider kubeconfig here as we have
