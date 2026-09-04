@@ -28,7 +28,7 @@ dictConfig({
     },
      'file.handler': {
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': '/root/kubeconfiggenerator.log',
+            'filename': '/root/crd-registration-helper.log',
             'maxBytes': 10000000,
             'backupCount': 5,
             'level': 'DEBUG',

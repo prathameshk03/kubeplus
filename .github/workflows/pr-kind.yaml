@@ -76,7 +76,7 @@ jobs:
     - name: Build KubeConfig Generator
       run: |
         cd $KUBEPLUS_HOME/deploy
-        ./build-artifact-kubeconfiggenerator.sh latest
+        ./build-artifact-crd-registration-helper.sh latest
 
     - name: Load Docker Images to Kind cluster
       run: |
