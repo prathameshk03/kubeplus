@@ -32,8 +32,8 @@ crd_registration_helper = _load_helper()
 class TestCRDRegistrationHelper(unittest.TestCase):
 
     @patch.object(crd_registration_helper, "run_command")
-    def test_chart_name_is_not_interpreted_by_shell(self, mock_run_command):
-        """A malicious chart name must not be interpreted by a shell."""
+    def test_download_and_untar_chart_uses_argument_lists(self, mock_run_command):
+        """Commands in download_and_untar_chart are passed as argument lists."""
         malicious_chart_name = "$(touch /tmp/kubeplus-cve-test)"
         mock_run_command.return_value = ("", "")
         crd_registration_helper.download_and_untar_chart("https://example.com/chart.tgz", malicious_chart_name)
@@ -93,7 +93,7 @@ class TestCRDRegistrationHelper(unittest.TestCase):
         finally:
             http.close()
 
-        self.assertFalse(os.path.exists(marker), "chartName must not be interpreted as a shell command",)
+        self.assertFalse(os.path.exists(marker), "Security check failed: chartName was executed as a shell command",)
         if os.path.exists(marker):
             os.remove(marker)
 
