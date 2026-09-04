@@ -5,6 +5,7 @@ env:
   ACTIONS_RUNNER_DEBUG: true
   KUBEPLUS_TEST_OUTPUT: yes
   KUBEPLUS_CI: true
+  DOCKER_BUILDKIT: 0
 jobs:
   job1:
     runs-on: ubuntu-22.04
