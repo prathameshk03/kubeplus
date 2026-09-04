@@ -73,7 +73,7 @@ jobs:
         cd $KUBEPLUS_HOME/platform-operator
         ./build-artifact.sh latest
 
-    - name: Build KubeConfig Generator
+    - name: Build CRD Registration Helper
       run: |
         cd $KUBEPLUS_HOME/deploy
         ./build-artifact-crd-registration-helper.sh latest
